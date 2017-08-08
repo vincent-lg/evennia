@@ -8,6 +8,7 @@ The `SignalHandler`, available through `obj.signals`  once installed, can be use
 
 """
 
+from evennia import ObjectDB
 from evennia.utils import delay
 
 class Signal(object):
@@ -30,12 +31,54 @@ class Signal(object):
         kwargs = ", ".join(["{}={}".format(arg, value) for arg, value in self.kwargs.items()])
         return "<Signal {} ({})>".format(" & ".join(self.tags), kwargs)
 
+    @property
+    def subscribed(self):
+        """ Return a list of objects subscribed to this signal.
+
+        Note:
+            This method actually performs a query in order to retrieve
+            objects with various tags.
+
+        """
+        # Find the list of objects with the active tags
+        queryset = ObjectDB.objects.filter()
+        for tag in self.tags:
+            queryset.filter(db_tags__db_key=tag, db_tags__db_key="sub_signal")
+
+        # Execute the queryset
+        return list(queryset)
+
+    def throw(self):
+        """Throw this signal to all subscribed objects.
+
+        """
+        for obj in self.subscirbed:
+            # Execute the callback
+            pass
+
 
 class SignalHandler(object):
 
     """
     SignalHandler accessible through `obj.signals`.
     """
+
+    script = None
+    
+    def _get_script(self):
+        """Retrieve or create the storage script."""
+        if type(self).script:
+            return type(self).script
+
+        try:
+            script = ScriptDB.objects.get(db_typeclass_path="evennia.contrib.aware.scripts.AwareStorage")
+        except ScriptDB.DoesNotExist:
+            # Create the script
+            script = create_script("evennia.contrib.aware.scripts.AwareStorage")
+        
+        # Place the script in the class variable to retrieve it later
+        type(self).script = script
+        return script
 
     #NOTE This section is to be edited once we have agreed on the tag/inheritance nature of signals.  The script should also be created/restored here, probably in a class variable.
     def subscribe(self, subscriber, callback, *signals, **kwargs):
