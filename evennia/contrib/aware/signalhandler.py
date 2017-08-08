@@ -27,8 +27,8 @@ class Signal(object):
         self.kwargs = kwargs
 
     def __repr__(self):
-        kwargs = ", ".join("{}={}".format(arg, value) for arg, value in self.kwargs.items()])
-        return "<signal {} ({})>".format(" & ".join(self.tags)), kwargs)
+        kwargs = ", ".join(["{}={}".format(arg, value) for arg, value in self.kwargs.items()])
+        return "<Signal {} ({})>".format(" & ".join(self.tags), kwargs)
 
 
 class SignalHandler(object):
