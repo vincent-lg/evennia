@@ -72,23 +72,26 @@ class SignalHandler(object):
         return script
 
     #NOTE This section is to be edited once we have agreed on the tag/inheritance nature of signals.  The script should also be created/restored here, probably in a class variable.
-    def subscribe(self, subscriber, callback, signal, *args, **kwargs):
+    def subscribe(self, signal, callback, *args, **kwargs):
         """Add subscriber to script - raises scripts.AlreadyExists"""
-        if callable(callback) and callback.__self__ == subscriber:
+        if callable(callback) and callback.__self__ == self.subscriber:
             callback = callback.__name__
-        return self.script.add_subscriber(signal, subscriber, callback)
+        return self.script.add_subscriber(signal, self.subscriber, callback)
 
-    def unsubscribe(self, subscriber, signal, callback=None, *args, **kwargs):
-        return self.script.remove_subscriber(signal, subscriber, callback)
+    def unsubscribe(self, signal, callback=None, *args, **kwargs):
+        return self.script.remove_subscriber(signal, self.subscriber, callback)
 
     def throw(self, signal, *args, **kwargs):
         signals = signal.split(_SIGNAL_SEPARATOR)
+        thrown_to = []
         while signals:
-            signal_to_check = signals.join(_SIGNAL_SEPARATOR)
+            signal_to_check = _SIGNAL_SEPARATOR.join(signals)
             if signal_to_check in self.script.db.subscribers:
                 for subscriber, callback in self.script.db.subscribers[signal_to_check]:
-                    if subscriber.hasattr(callback):
-                        subscriber.getattr(callback)(signal, *args, **kwargs)
+                    thrown_to.append(subscriber)
+                    if hasattr(subscriber, callback):
+                        getattr(subscriber, callback)(signal, *args, **kwargs)
                     else:
                         raise "Subscriber does not have callback {}".format(callback)
             signals.pop()
+        return thrown_to
