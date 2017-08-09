@@ -9,7 +9,11 @@ The `SignalHandler`, available through `obj.signals`  once installed, can be use
 """
 
 from evennia import ObjectDB
+from evennia import ScriptDB
 from evennia.utils import delay
+from evennia.utils.create import create_script
+
+_SIGNAL_SEPARATOR = ":"
 
 class Signal(object):
 
@@ -23,30 +27,13 @@ class Signal(object):
 
     """
 
-    def __init__(self, *tags, **kwargs):
-        self.tags = tags
+    def __init__(self, tag, *args, **kwargs):
+        self.tag = tag
         self.kwargs = kwargs
 
     def __repr__(self):
         kwargs = ", ".join(["{}={}".format(arg, value) for arg, value in self.kwargs.items()])
         return "<Signal {} ({})>".format(" & ".join(self.tags), kwargs)
-
-    @property
-    def subscribed(self):
-        """ Return a list of objects subscribed to this signal.
-
-        Note:
-            This method actually performs a query in order to retrieve
-            objects with various tags.
-
-        """
-        # Find the list of objects with the active tags
-        queryset = ObjectDB.objects.filter()
-        for tag in self.tags:
-            queryset.filter(db_tags__db_key=tag, db_tags__db_key="sub_signal")
-
-        # Execute the queryset
-        return list(queryset)
 
     def throw(self):
         """Throw this signal to all subscribed objects.
@@ -64,7 +51,11 @@ class SignalHandler(object):
     """
 
     script = None
-    
+
+    def __init__(self, subscriber):
+        script = self._get_script()
+        self.subscriber = subscriber
+
     def _get_script(self):
         """Retrieve or create the storage script."""
         if type(self).script:
@@ -75,42 +66,29 @@ class SignalHandler(object):
         except ScriptDB.DoesNotExist:
             # Create the script
             script = create_script("evennia.contrib.aware.scripts.AwareStorage")
-        
+
         # Place the script in the class variable to retrieve it later
         type(self).script = script
         return script
 
     #NOTE This section is to be edited once we have agreed on the tag/inheritance nature of signals.  The script should also be created/restored here, probably in a class variable.
-    def subscribe(self, subscriber, callback, *signals, **kwargs):
+    def subscribe(self, subscriber, callback, signal, *args, **kwargs):
+        """Add subscriber to script - raises scripts.AlreadyExists"""
         if callable(callback) and callback.__self__ == subscriber:
             callback = callback.__name__
-        for signal in signals:
-            if isinstance(signal, Signal):
-                if signal.key in self.db.subscribers:
-                    self.db.subscribers[signal.key].append((subscriber, callback))
-                else:
-                    self.db.subscribers[signal.key] = [(subscriber, callback)]
-            elif isinstance(signal, (str, unicode)):
-                if signal in self.db.subscribers:
-                    self.db.subscribers[signal].append((subscriber, callback))
-                else:
-                    self.db.subscribers[signal] = [(subscriber, callback)]
-            else:
-                # might wanna throw error
-                pass
+        return self.script.add_subscriber(signal, subscriber, callback)
 
-    def is_subscribed(self, subscriber, signal):
-        if isinstance(signal, Signal):
-            signal = signal.key
-        if signal in self.db.subscribers:
-            for stored_sub, callback in self.db.subscribers[signal]:
-                if subscriber == stored_sub:
-                    return True
-        # if we get here we either didn't find the subscriber or the signal
-        return False
+    def unsubscribe(self, subscriber, signal, callback=None, *args, **kwargs):
+        return self.script.remove_subscriber(signal, subscriber, callback)
 
-    def unsubscribe(self, subscriber, *signals, **kwargs):
-        keys_to_remove = []
-        for signal in signals:
-            if isinstance(signal, Signal):
-                keys_to_remove.append(signal.key)
+    def throw(self, signal, *args, **kwargs):
+        signals = signal.split(_SIGNAL_SEPARATOR)
+        while signals:
+            signal_to_check = signals.join(_SIGNAL_SEPARATOR)
+            if signal_to_check in self.script.db.subscribers:
+                for subscriber, callback in self.script.db.subscribers[signal_to_check]:
+                    if subscriber.hasattr(callback):
+                        subscriber.getattr(callback)(signal, *args, **kwargs)
+                    else:
+                        raise "Subscriber does not have callback {}".format(callback)
+            signals.pop()
