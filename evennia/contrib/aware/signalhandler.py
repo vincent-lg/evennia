@@ -88,10 +88,11 @@ class SignalHandler(object):
             signal_to_check = _SIGNAL_SEPARATOR.join(signals)
             if signal_to_check in self.script.db.subscribers:
                 for subscriber, callback in self.script.db.subscribers[signal_to_check]:
-                    thrown_to.append(subscriber)
-                    if hasattr(subscriber, callback):
-                        getattr(subscriber, callback)(signal, *args, **kwargs)
-                    else:
-                        raise "Subscriber does not have callback {}".format(callback)
+                    if subscriber not in thrown_to:
+                        thrown_to.append(subscriber)
+                        if hasattr(subscriber, callback):
+                            getattr(subscriber, callback)(signal, *args, **kwargs)
+                        else:
+                            raise "Subscriber does not have callback {}".format(callback)
             signals.pop()
         return thrown_to
