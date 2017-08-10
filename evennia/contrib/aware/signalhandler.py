@@ -52,9 +52,8 @@ class SignalHandler(object):
 
     script = None
 
-    def __init__(self, subscriber):
-        script = self._get_script()
-        self.subscriber = subscriber
+    def __init__(self, obj):
+        self.obj = obj
 
     def _get_script(self):
         """Retrieve or create the storage script."""
@@ -71,17 +70,20 @@ class SignalHandler(object):
         type(self).script = script
         return script
 
-    #NOTE This section is to be edited once we have agreed on the tag/inheritance nature of signals.  The script should also be created/restored here, probably in a class variable.
     def subscribe(self, signal, action="cmd", callback=None, **kwargs):
         """Add subscriber to script - raises scripts.AlreadyExists"""
-        if callable(callback) and getattr(callback, "__self__, None):
+        script = self._get_script()
+        if callable(callback) and getattr(callback, "__self__", None):
             callback = (callback.__self__, callback.__name__)
 
-        return self.script.add_subscriber(signal, self.subscriber, action, callback, kwargs)
+        return script.add_subscriber(signal, self.obj, action, callback, **kwargs)
 
     def unsubscribe(self, signal, action="cmd", callback=None, **kwargs):
-        return self.script.remove_subscriber(signal, self.subscriber, action, callback, kwargs)
+        script = self._get_script()
+        return script.remove_subscriber(signal, self.obj, action, callback, **kwargs)
 
     def throw(self, signal, **kwargs):
-        thrown_to = self.script.throw_signal(signal, self.subscriber, **kwargs)
+        script = self._get_script()
+        thrown_to = script.throw_signal(signal, self.subscriber, **kwargs)
         return thrown_to
+

@@ -42,7 +42,7 @@ class AwareStorage(DefaultScript):
         self.db.subscribers = {}
         self.db.actions = []
 
-    def add_subscriber(self, signal, obj, action=None, callback=None, **kwarg):
+    def add_subscriber(self, signal, obj, action=None, callback=None, **kwargs):
         """
         Add a new link between a signal, a subscriber (object) and an action.
 
@@ -84,7 +84,7 @@ class AwareStorage(DefaultScript):
             self.db.subscribers[signal] = [signature]
         return True
 
-    def remove_subscriber(self, signal, obj, action=None, callback=None, **kwargs):
+    def remove_subscriber(self, signal, obj, action="cmd", callback=None, **kwargs):
         signature = {
                 "obj": obj,
                 "action": action,
