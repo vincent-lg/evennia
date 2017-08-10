@@ -82,16 +82,5 @@ class SignalHandler(object):
         return self.script.remove_subscriber(signal, self.subscriber, callback)
 
     def throw(self, signal, *args, **kwargs):
-        signals = signal.split(_SIGNAL_SEPARATOR)
-        thrown_to = []
-        while signals:
-            signal_to_check = _SIGNAL_SEPARATOR.join(signals)
-            if signal_to_check in self.script.db.subscribers:
-                for subscriber, callback in self.script.db.subscribers[signal_to_check]:
-                    thrown_to.append(subscriber)
-                    if hasattr(subscriber, callback):
-                        getattr(subscriber, callback)(signal, *args, **kwargs)
-                    else:
-                        raise "Subscriber does not have callback {}".format(callback)
-            signals.pop()
+        thrown_to = self.script.throw_signal(signal, self.subscriber, *args, **kwargs)
         return thrown_to
