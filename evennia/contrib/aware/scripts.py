@@ -12,14 +12,15 @@ class AlreadyExists(Exception):
 
 def get_local_objects(location, distance):
     def recurse(location, distance, exclude_objects=[], exclude_locations=[]):
-        """This could hit the recursion limit"""
+        """Self-limiting - will not hit recursion limit due to excluding already visited locations"""
         local_objects = [obj for obj in location.contents if not obj.destination and obj not in exclude_objects]
         exclude_objects.extend(local_objects)
         if distance > 0:
-            for exit in location.exits:
-                exclude_locations.append(exit.destination)
+            locations_to_search = [exit.destination for exit in location.exits if exit.destination not in exclude_locations]
+            for location in locations_to_search:
+                exclude_locations.append(location)
                 found, exclude_objects, exclude_locations = recurse(
-                                                            exit.destination,
+                                                            location,
                                                             distance-1,
                                                             exclude_objects,
                                                             exclude_locations)
@@ -67,7 +68,7 @@ class AwareStorage(DefaultScript):
             callback object is specified, then it will be used.  Otherwise,
             the action will be used.  The default action being "cmd",
             the default behavior would be to execute a command.
-        
+
         """
         signature = {
                 "obj": obj,
