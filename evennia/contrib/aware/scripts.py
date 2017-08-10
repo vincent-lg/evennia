@@ -31,6 +31,15 @@ def get_local_objects(location, distance):
     return recurse(location, distance)[0]
 
 
+def make_storable_callback(callback, call_on=None):
+    # TODO: Extend this definition to allow non-instance callbacks
+    if callable(callback) and getattr(callback, "__self__", None):
+        callback = (callback.__self__, callback.__name__)
+    elif isinstance(callback, (str, unicode)):
+        callback = (call_on, callback)
+    return callback
+
+
 class AwareStorage(DefaultScript):
 
     """
@@ -38,8 +47,8 @@ class AwareStorage(DefaultScript):
     """
 
     def at_script_creation(self):
-        self.key = " aware_storage"
-        self.desc = " Aware storage global script"
+        self.key = "aware_storage"
+        self.desc = "Aware storage global script"
         self.db.subscribers = {}
         self.db.actions = []
 
@@ -70,6 +79,8 @@ class AwareStorage(DefaultScript):
             the default behavior would be to execute a command.
 
         """
+        callback = make_storable_callback(callback, obj)
+
         signature = {
                 "obj": obj,
                 "action": action,
@@ -86,6 +97,8 @@ class AwareStorage(DefaultScript):
         return True
 
     def remove_subscriber(self, signal, obj, action="cmd", callback=None, **kwargs):
+        callback = make_storable_callback(callback, obj)
+
         signature = {
                 "obj": obj,
                 "action": action,
@@ -97,11 +110,11 @@ class AwareStorage(DefaultScript):
             self.db.subscribers[signal].remove(signature)
         else:
             # Perhaps we should raise an error here?
-            pass
+            return False
 
         return True
 
-    def throw_signal(self, signal, source, *args, **kwargs):
+    def throw_signal(self, signal, source, **kwargs):
         signals = signal.split(_SIGNAL_SEPARATOR)
 
         if "local" in kwargs:
@@ -128,13 +141,22 @@ class AwareStorage(DefaultScript):
             if signal_to_check in self.db.subscribers:
                 to_check = self.db.subscribers[signal_to_check]
                 if local:
-                    to_check = [(obj, callback) for obj, callback in to_check if obj in viable_objects]
+                    to_check = [signature for signature in to_check if signature['obj'] in viable_objects]
 
-                for subscriber, callback in to_check:
+                for signature in to_check:
+                    subscriber = signature['obj']
                     if subscriber not in thrown_to:
                         thrown_to.append(subscriber)
-                        if hasattr(subscriber, callback):
-                            getattr(subscriber, callback)(signal, *args, **kwargs)
+                        if signature['callback']:
+                            call_on, callback = signature['callback']
+                            if hasattr(call_on, callback):
+                                kwargs['signal'] = signal
+                                getattr(call_on, callback)(**kwargs)
+                            else:
+                                print "Subscriber does not have callback {}".format(callback)
                         else:
-                            raise "Subscriber does not have callback {}".format(callback)
+                            action = signature['action']
+                            print("Not implemented")
             signals.pop()
+
+        return thrown_to

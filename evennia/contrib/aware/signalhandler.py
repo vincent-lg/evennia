@@ -73,17 +73,15 @@ class SignalHandler(object):
     def subscribe(self, signal, action="cmd", callback=None, **kwargs):
         """Add subscriber to script - raises scripts.AlreadyExists"""
         script = self._get_script()
-        if callable(callback) and getattr(callback, "__self__", None):
-            callback = (callback.__self__, callback.__name__)
 
         return script.add_subscriber(signal, self.obj, action, callback, **kwargs)
 
     def unsubscribe(self, signal, action="cmd", callback=None, **kwargs):
         script = self._get_script()
+
         return script.remove_subscriber(signal, self.obj, action, callback, **kwargs)
 
     def throw(self, signal, **kwargs):
         script = self._get_script()
-        thrown_to = script.throw_signal(signal, self.subscriber, **kwargs)
+        thrown_to = script.throw_signal(signal, self.obj, **kwargs)
         return thrown_to
-
