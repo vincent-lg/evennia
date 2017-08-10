@@ -42,28 +42,61 @@ class AwareStorage(DefaultScript):
         self.db.subscribers = {}
         self.db.actions = []
 
-    def add_action(self, signal
-    def add_subscriber(self, signal, subscriber, callback):
-        signature = (subscriber, callback)
+    def add_subscriber(self, signal, obj, action=None, callback=None, **kwarg):
+        """
+        Add a new link between a signal, a subscriber (object) and an action.
+
+        Args:
+            signal (str): the signal, can use sub-categories.
+            obj (Object): the object wanted to subscribe to this signal.
+            action (str, optional): action, as a pre-configured awarefunc.
+            callback (callable): callback to be called if the signal is thrown.
+            Any (any): other keywords as needed.
+
+        Notes:
+            One can use the separator in order to specify signals with
+            a hierarchy.  The default separator being ":", one could
+            send the signal "sound:crying:child" for instance.
+
+            Awarefuncs are pre-configured actions to perform simple
+            and generic actions.  The best example is probably "cmd",
+            which allows to have the object use a command.  The key
+            of the action should be specified in the `action` keyword.
+
+            Notice that actions and callbacks are exclusive: if a
+            callback object is specified, then it will be used.  Otherwise,
+            the action will be used.  The default action being "cmd",
+            the default behavior would be to execute a command.
+        
+        """
+        signature = {
+                "obj": obj,
+                "action": action,
+                "callback": callback,
+                "kwargs": kwargs,
+        }
         if signal in self.db.subscribers:
             if signature in self.db.subscribers[signal]:
-                raise AlreadyExists("{sub} is already subscribed to {signal} with that callback".format(sub=subscriber, signal=signal))
+                raise AlreadyExists("{sub} is already subscribed to {signal} with that action/callback".format(sub=obj, signal=signal))
             else:
                 self.db.subscribers[signal].append(signature)
         else:
             self.db.subscribers[signal] = [signature]
         return True
 
-    def remove_subscriber(self, signal, subscriber, callback=None):
-        if signal in self.db.subscribers:
-            if callback:
-                to_delete = [(sub, call) for sub, call in self.db.subscribers[signal] if sub is subscriber]
-                for signature in to_delete:
-                    del self.db.subscribers[signal][signature]
-            else:
-                signature = (subscriber, callback)
-                if signature in self.db.subscribers[signal]:
-                    del self.db.subscribers[signal][signature]
+    def remove_subscriber(self, signal, obj, action=None, callback=None, **kwargs):
+        signature = {
+                "obj": obj,
+                "action": action,
+                "callback": callback,
+                "kwargs": kwargs,
+        }
+
+        if signal in self.db.subscribers and signature in self.db.subscribers[signal]:
+            self.db.subscribers[signal].remove(signature)
+        else:
+            # Perhaps we should raise an error here?
+            pass
 
         return True
 

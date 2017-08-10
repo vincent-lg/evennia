@@ -72,15 +72,16 @@ class SignalHandler(object):
         return script
 
     #NOTE This section is to be edited once we have agreed on the tag/inheritance nature of signals.  The script should also be created/restored here, probably in a class variable.
-    def subscribe(self, signal, callback, *args, **kwargs):
+    def subscribe(self, signal, action="cmd", callback=None, **kwargs):
         """Add subscriber to script - raises scripts.AlreadyExists"""
-        if callable(callback) and callback.__self__ == self.subscriber:
-            callback = callback.__name__
-        return self.script.add_subscriber(signal, self.subscriber, callback)
+        if callable(callback) and getattr(callback, "__self__, None):
+            callback = (callback.__self__, callback.__name__)
 
-    def unsubscribe(self, signal, callback=None, *args, **kwargs):
-        return self.script.remove_subscriber(signal, self.subscriber, callback)
+        return self.script.add_subscriber(signal, self.subscriber, action, callback, kwargs)
 
-    def throw(self, signal, *args, **kwargs):
-        thrown_to = self.script.throw_signal(signal, self.subscriber, *args, **kwargs)
+    def unsubscribe(self, signal, action="cmd", callback=None, **kwargs):
+        return self.script.remove_subscriber(signal, self.subscriber, action, callback, kwargs)
+
+    def throw(self, signal, **kwargs):
+        thrown_to = self.script.throw_signal(signal, self.subscriber, **kwargs)
         return thrown_to
