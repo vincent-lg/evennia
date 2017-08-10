@@ -90,7 +90,7 @@ class ActionHandler(object):
         script = self._get_script()
         return script.db.actions.get(self.obj, [])
 
-    def add(self):
+    def add(self, signal, action="cmd", callback=None, **kwargs):
         pass
 
     def remove(self):

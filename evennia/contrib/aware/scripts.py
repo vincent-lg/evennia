@@ -19,6 +19,7 @@ class AwareStorage(DefaultScript):
         self.db.subscribers = {}
         self.db.actions = []
 
+    def add_action(self, signal
     def add_subscriber(self, signal, subscriber, callback):
         signature = (subscriber, callback)
         if signal in self.db.subscribers:
