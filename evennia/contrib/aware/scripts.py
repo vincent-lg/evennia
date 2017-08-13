@@ -82,32 +82,40 @@ class AwareStorage(DefaultScript):
         callback = make_storable_callback(callback, obj)
 
         signature = {
-                "obj": obj,
                 "action": action,
                 "callback": callback,
                 "kwargs": kwargs,
         }
-        if signal in self.db.subscribers:
-            if signature in self.db.subscribers[signal]:
-                raise AlreadyExists("{sub} is already subscribed to {signal} with that action/callback".format(sub=obj, signal=signal))
-            else:
-                self.db.subscribers[signal].append(signature)
+        if signal not in self.db.subscribers:
+            self.db.subscribers[signal] = {}
+        subscribers = self.db.subscribers[signal]
+        if obj not in subscribers:
+            subscribers[obj] = []
+        signatures = subscribers[obj]
+        if signature in signatures:
+            raise AlreadyExists("{sub} is already subscribed to {signal} with that action/callback".format(sub=obj, signal=signal))
         else:
-            self.db.subscribers[signal] = [signature]
+            signatures.append(signature)
+
         return True
 
     def remove_subscriber(self, signal, obj, action="cmd", callback=None, **kwargs):
         callback = make_storable_callback(callback, obj)
-
         signature = {
-                "obj": obj,
                 "action": action,
                 "callback": callback,
                 "kwargs": kwargs,
         }
-
-        if signal in self.db.subscribers and signature in self.db.subscribers[signal]:
-            self.db.subscribers[signal].remove(signature)
+        if not signal in self.db.subscribers:
+            return False
+        
+        subscribers = self.db.subscribers[signal]
+        if obj not in subscribers:
+            return False
+        
+        signatures = subscribers[obj]
+        if signature in signatures:
+            signatures.remove(signature)
         else:
             # Perhaps we should raise an error here?
             return False

@@ -12,7 +12,7 @@ from evennia.utils.utils import lazy_property
 from evennia.contrib.aware.actionhandler import ActionHandler
 from evennia.contrib.aware.signalhandler import SignalHandler
 
-class ActionsMixin(type):
+class ActionsMixin(object):
 
     """
     Mixin to add the action handler in `obj.actions`.
@@ -24,7 +24,7 @@ class ActionsMixin(type):
         return ActionHandler(self)
 
 
-class SignalsMixin(type):
+class SignalsMixin(object):
 
     """
     Mixin to add the signal handler in `obj.signals`.
