@@ -51,6 +51,10 @@ class AwareStorage(DefaultScript):
         self.desc = "Aware storage global script"
         self.db.subscribers = {}
         self.db.actions = []
+        self.ndb.traces = {}
+
+    def at_start(self):
+        self.ndb.traces = {}
 
     def add_subscriber(self, signal, obj, action=None, callback=None, **kwargs):
         """
@@ -97,6 +101,10 @@ class AwareStorage(DefaultScript):
         else:
             signatures.append(signature)
 
+        # Add the tag on the object
+        if not obj.tags.get(signal, category="signal"):
+            obj.tags.add(signal, category="signal")
+
         return True
 
     def remove_subscriber(self, signal, obj, action="cmd", callback=None, **kwargs):
@@ -119,6 +127,10 @@ class AwareStorage(DefaultScript):
         else:
             # Perhaps we should raise an error here?
             return False
+        
+        # Remove the tag if necessary
+        if obj.tags.get(signal, category="signal"):
+            obj.tags.remove(signal, category="signal")
 
         return True
 

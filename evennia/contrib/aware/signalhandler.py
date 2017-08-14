@@ -8,10 +8,11 @@ The `SignalHandler`, available through `obj.signals`  once installed, can be use
 
 """
 
-from evennia import ObjectDB
-from evennia import ScriptDB
-from evennia.utils import delay
+from Queue import Queue
+
+from evennia import ObjectDB, ScriptDB
 from evennia.utils.create import create_script
+from evennia.utils import delay
 
 _SIGNAL_SEPARATOR = ":"
 
@@ -20,28 +21,74 @@ class Signal(object):
     """
     A signal.
 
-    Signals are created when they are thrown.  They can possess several
-    tags (given as positional arguments) and keywords (given as keyword
-    arguments during creation).  Tags act as keys, and an object can
-    subscribe to watch only one tag or a combination of them.
+    Signals are created when they are thrown.  They possess a name
+    with optional sub-categories using the defined separator.
+    They also have keywords (given as keyword
+    arguments during creation).
 
     """
 
-    def __init__(self, tag, *args, **kwargs):
-        self.tag = tag
-        self.kwargs = kwargs
+    def __init__(self, name, *args, **kwargs):
+        self.name = name
+        self.local = kwargs.get("local", True)
+        self.from_obj = kwargs.get("from_obj")
+        self.location = kwargs.get("location", self.from_obj)
+        self.propagation = kwargs.get("propagation", 0)
+        self.args = args
+        self.kwargs = kwargs.get("kwargs", {})
 
     def __repr__(self):
         kwargs = ", ".join(["{}={}".format(arg, value) for arg, value in self.kwargs.items()])
-        return "<Signal {} ({})>".format(" & ".join(self.tags), kwargs)
+        return "<Signal {} ({})>".format(self.name, kwargs)
 
     def throw(self):
-        """Throw this signal to all subscribed objects.
+        """Throw the signal, replacing keyword arguments."""
+        script = SignalHandler._get_script()
+        trace = [{"source": self.__dict__}]
+        script.ndb.traces[self.name] = trace
+      
+        # If a local signal, get the possible locations
+        if self.local:
+            graph = Queue()
+            visited = [self.location]
+            locations = {self.location: (0, None)}
+            graph.put((0, self.location))
+            while not graph.empty():
+                distance, location = graph.get()
+                if distance > self.propagation:
+                    continue
 
-        """
-        for obj in self.subscirbed:
-            # Execute the callback
-            pass
+                trace.append({"explore": {"location": location, "distance": distance}})
+                for exit in ObjectDB.objects.filter(db_destination__isnull=False).exclude(
+                            db_destination__in=locations.keys()):
+                    destination = exit.destination
+                    visited.append(destination)
+                    return_exits = ObjectDB.objects.filter(db_location=destination, db_destination=location)
+                    return_exit = return_exits[0] if return_exits else None
+                    graph.put((distance + 1, destination))
+                    locations[destination] = (distance + 1, return_exit)
+
+            # We now have a list of locations with distance and exit
+            # Get the objects with the signal name as tag
+            subscribed = ObjectDB.objects.filter(db_location__in=visited,
+                    db_tags__db_key=self.name, db_tags__db_category="signal")
+            
+            # Browse the list of objects and send them the signal
+            # Sort by distance from location
+            subscribed = sorted(subscribed, key=lambda obj: locations[obj.location][0])
+            for obj in subscribed:
+                location = obj.location
+                distance, exit = locations[location]
+                self.distance = distance
+                self.exit = exit
+                trace.append({"throw": {"obj": obj, "distance": distance, "exit": exit}})
+
+                # Get the list of actions to which this object is subscribed for this signal
+                signatures = script.db.subscribers.get(self.name, {}).get(obj, [])
+                for signature in signatures:
+                    cmd = signature["kwargs"]["cmd"]
+                    trace.append({"signature": signature})
+                    obj.execute_cmd(cmd)
 
 
 class SignalHandler(object):
@@ -55,10 +102,11 @@ class SignalHandler(object):
     def __init__(self, obj):
         self.obj = obj
 
-    def _get_script(self):
+    @classmethod
+    def _get_script(cls):
         """Retrieve or create the storage script."""
-        if type(self).script:
-            return type(self).script
+        if cls.script:
+            return cls.script
 
         try:
             script = ScriptDB.objects.get(db_typeclass_path="evennia.contrib.aware.scripts.AwareStorage")
@@ -67,7 +115,7 @@ class SignalHandler(object):
             script = create_script("evennia.contrib.aware.scripts.AwareStorage")
 
         # Place the script in the class variable to retrieve it later
-        type(self).script = script
+        cls.script = script
         return script
 
     def subscribe(self, signal, action="cmd", callback=None, **kwargs):
@@ -81,7 +129,7 @@ class SignalHandler(object):
 
         return script.remove_subscriber(signal, self.obj, action, callback, **kwargs)
 
-    def throw(self, signal, **kwargs):
-        script = self._get_script()
-        thrown_to = script.throw_signal(signal, self.obj, **kwargs)
-        return thrown_to
+    def throw(self, signal, *args, **kwargs):
+        signal = Signal(signal, *args, **kwargs)
+        signal.throw()
+
