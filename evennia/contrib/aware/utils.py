@@ -7,7 +7,8 @@ from Queue import Queue
 from evennia import ObjectDB
 from evennia.utils.create import create_script
 from evennia.utils.logger import log_err, log_trace
-from evennia.utils.utils import class_from_module, delay
+from evennia.utils import utils
+
 
 # Constants
 SCRIPT = None
@@ -149,8 +150,8 @@ class Signal(object):
                 for action in actions:
                     args = action.get("args", ())
                     kwargs = action.get("kwargs", {})
-                if hasattr(obj, "actions"):
-                    obj.actions.add(self, *args, **kwargs)
+                    if hasattr(obj, "actions"):
+                        obj.actions.add(self, *args, **kwargs)
 
 # Functions
 def _get_script():
@@ -170,7 +171,7 @@ def _get_script():
     if SCRIPT is not None:
         return SCRIPT
 
-    AwareStorage = class_from_module("evennia.contrib.aware.scripts.AwareStorage")
+    AwareStorage = utils.class_from_module("evennia.contrib.aware.scripts.AwareStorage")
     SCRIPT = AwareStorage.instance
 
     # If SCRIPT is still None, create the script
@@ -237,17 +238,17 @@ def do_action(signal, obj, action_id):
             # Depending on the result, schedule the same action or the next to execute
             delay = 0
             next_action_id = None
-            if isinstance(result, (int, float)):
+            if isinstance(result, bool) and result:
+                # Try to find the next action
+                terminate_action(obj, action_id)
+                if script.db.actions.get(obj):
+                    next_action = script.db.actions[obj][0]
+                    next_action_id = next_action["action_id"]
+                    delay = next_action.get("delay", 0)
+            elif isinstance(result, (int, float)):
                 # If result is a number, schedule the same action to run in `result` seconds
                 delay = result
                 next_action_id = action_id
-            elif isinstance(result, bool) and result:
-                # Try to find the next action
-                terminate_action(obj, action_id)
-                if script.db.actions.get(obhj):
-                    next_action = script.db.actions[obj][0]
-                    next_action_id = next_action["action_id"]
-                    delay = next_action["delay"]
             else:
                 next_action_id = action_id
                 delay = 0

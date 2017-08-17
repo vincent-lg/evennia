@@ -60,7 +60,6 @@ class AwareStorage(DefaultScript):
                 self.ndb.awarefuncs.update(utils.all_from_module(address))
 
         # Write in the `instance` class variable since it is started
-        print "I add myself to instance"
         type(self).instance = self
 
     def add_subscriber(self, signal, obj, *args, **kwargs):
@@ -223,7 +222,6 @@ class AwareStorage(DefaultScript):
         # Store the arguments for this action
         kwargs = representation.copy()
         del kwargs["action_id"]
-        print "Adding in", (action_id, args, kwargs)
         self.db.unpacked_actions[action_id] = [list(args), kwargs]
 
         # Program the task to execute if high in priority
