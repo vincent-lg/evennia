@@ -3,33 +3,11 @@ Scripts for the aware contrib.
 """
 
 from evennia import DefaultScript
-
-
-_SIGNAL_SEPARATOR = ":"
+from evennia.utils import utils
+from evennia.contrib.aware.utils import Action, do_action
 
 class AlreadyExists(Exception):
     pass
-
-def get_local_objects(location, distance):
-    def recurse(location, distance, exclude_objects=[], exclude_locations=[]):
-        """Self-limiting - will not hit recursion limit due to excluding already visited locations"""
-        local_objects = [obj for obj in location.contents if not obj.destination and obj not in exclude_objects]
-        exclude_objects.extend(local_objects)
-        if distance > 0:
-            locations_to_search = [exit.destination for exit in location.exits if exit.destination not in exclude_locations]
-            for location in locations_to_search:
-                exclude_locations.append(location)
-                found, exclude_objects, exclude_locations = recurse(
-                                                            location,
-                                                            distance-1,
-                                                            exclude_objects,
-                                                            exclude_locations)
-                local_objects.extend(found)
-
-        return (local_objects, exclude_objects, exclude_locations)
-
-    return recurse(location, distance)[0]
-
 
 def make_storable_callback(callback, call_on=None):
     # TODO: Extend this definition to allow non-instance callbacks
@@ -45,18 +23,47 @@ class AwareStorage(DefaultScript):
     """
     Global script to store information regarding signals and actions.
     """
+    
+    instance = None
 
     def at_script_creation(self):
         self.key = "aware_storage"
         self.desc = "Aware storage global script"
+        self.persistent = True
+
+        # Persistent storage
         self.db.subscribers = {}
-        self.db.actions = []
-        self.ndb.traces = {}
+        self.db.actions = {}
+        self.db.action_storage = {}
+        self.db.unpacked_actions = []
 
     def at_start(self):
         self.ndb.traces = {}
+        self.ndb.free_id = 1
+        self.ndb.action_ids = []
 
-    def add_subscriber(self, signal, obj, action=None, callback=None, **kwargs):
+        # Generate action IDs
+        for obj, actions in self.db.actions.items():
+            for action in actions:
+                action_id = action.get("action_id")
+                if action_id:
+                    self.ndb.action_ids.append(action_id)
+        
+        if self.ndb.action_ids:
+            self.free_id = max(self.ndb.action_ids) + 1
+
+        # Load the awarefuncs
+        addresses = ["evennia.contrib.aware.awarefuncs"]
+        self.ndb.awarefuncs = {}
+        for address in addresses:
+            if utils.pypath_to_realpath(address):
+                self.ndb.awarefuncs.update(utils.all_from_module(address))
+
+        # Write in the `instance` class variable since it is started
+        print "I add myself to instance"
+        type(self).instance = self
+
+    def add_subscriber(self, signal, obj, *args, **kwargs):
         """
         Add a new link between a signal, a subscriber (object) and an action.
 
@@ -83,11 +90,14 @@ class AwareStorage(DefaultScript):
             the default behavior would be to execute a command.
 
         """
-        callback = make_storable_callback(callback, obj)
+        if "callback" in kwargs:
+            callback = kwargs["callback"]
+            if callback and callable(callback) and getattr(callback, "__self__", None):
+                callback = (callback.__self__, callback.__name__)
+                kwargs["callback"] = callback
 
         signature = {
-                "action": action,
-                "callback": callback,
+                "args": args,
                 "kwargs": kwargs,
         }
         if signal not in self.db.subscribers:
@@ -134,49 +144,91 @@ class AwareStorage(DefaultScript):
 
         return True
 
-    def throw_signal(self, signal, source, **kwargs):
-        signals = signal.split(_SIGNAL_SEPARATOR)
+    def add_action(self, signal, obj, *args, **kwargs):
+        """
+        Add an action to the objects' priority queue.
 
-        if "local" in kwargs:
-            local = kwargs.pop("local")
+        Args:
+            obj (Object): the object having to go for act.
+            any (Any): any other positional arguments to send to the action.
+
+        Kwargs:
+            action (str, optional): the name of the generic awarefunc.
+            callback (callback, optional): the specific callback.
+            priority (int, optional): the priority of this action.
+            delay (int, optional): delay in seconds before executing this action.
+
+        Notes:
+            The specified action will be added in the priority queue of
+            actions for this object.  An action ID will be generated for
+            this action.  Unless otherwise specified, the action will
+            be called almost immediately (after a little pause to
+            ensure actions don't collide with each other).
+            
+            The `priority` keyword will specify the order of actions.
+            A higher priority will be first in the action queue.  If
+            the priority isn't specified, a priority 0 is assumed.
+
+        """
+        action_id = self.ndb.free_id
+        self.ndb.free_id += 1
+        self.ndb.action_ids.append(action_id)
+
+        # Extract the keyword arguments
+        action = "cmd"
+        if "aciton" in kwargs:
+            action = kwargs.pop("action")
+
+        callback = None
+        if "callback" in kwargs:
+            callback = kwargs.pop("callback")
+
+        priority = 0
+        if "priority" in kwargs:
+            priority = kwargs.pop("priority")
+
+        delay = 0
+        if "delay" in kwargs:
+            delay = kwargs.pop("delay")
+
+        if obj not in self.db.actions:
+            self.db.actions[obj] = []
+        actions = self.db.actions[obj]
+
+        action_indice = 0
+        if "action_indice" in kwargs:
+            action_indice = kwargs.pop("action_indice")
         else:
-            local = True
+            # Determine the action_indice based on priority
+            action_indice = -1
+            for indice, description in enumerate(actions):
+                if description.get("priority", 0) < priority:
+                    action_indice = indice
+                    break
 
-        if "distance" in kwargs:
-            distance = kwargs.pop("distance")
+        # Save the actions
+        representation = {
+                "action_id": action_id,
+                "action": action,
+                "callback": callback,
+                "priority": priority,
+                "delay": delay,
+        }
+        representation.update(kwargs)
+        if action_indice < 0:
+            actions.append(representation.copy())
         else:
-            distance = 3
+            actions.insert(action_indice, representation.copy())
 
-        if hasattr(source, "location") and source.location:
-            location = source.location
-        else:
-            location = source
+        # Store the arguments for this action
+        kwargs = representation.copy()
+        del kwargs["action_id"]
+        print "Adding in", (action_id, args, kwargs)
+        self.db.unpacked_actions[action_id] = [list(args), kwargs]
 
-        if local:
-            viable_objects = get_local_objects(location, distance)
+        # Program the task to execute if high in priority
+        if len(actions) == 1 or action_indice == 0:
+            utils.delay(delay, do_action, signal.__dict__.copy(), obj, action_id, persistent=True)
 
-        thrown_to = []
-        while signals: # loop through signals until we've popped them all out
-            signal_to_check = _SIGNAL_SEPARATOR.join(signals)
-            if signal_to_check in self.db.subscribers:
-                to_check = self.db.subscribers[signal_to_check]
-                if local:
-                    to_check = [signature for signature in to_check if signature['obj'] in viable_objects]
+        return Action(*args, **representation)
 
-                for signature in to_check:
-                    subscriber = signature['obj']
-                    if subscriber not in thrown_to:
-                        thrown_to.append(subscriber)
-                        if signature['callback']:
-                            call_on, callback = signature['callback']
-                            if hasattr(call_on, callback):
-                                kwargs['signal'] = signal
-                                getattr(call_on, callback)(**kwargs)
-                            else:
-                                print "Subscriber does not have callback {}".format(callback)
-                        else:
-                            action = signature['action']
-                            print("Not implemented")
-            signals.pop()
-
-        return thrown_to

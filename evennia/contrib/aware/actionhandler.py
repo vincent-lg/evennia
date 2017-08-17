@@ -9,40 +9,7 @@ script is used to store actions and retain priority orders.
 
 from evennia import ScriptDB
 from evennia.utils.create import create_script
-
-class Action(object):
-
-    """Class to represent an action.
-
-    An action is to connect an object and a signal.  This class will
-    determine what the object should do if this signal is thrown.
-    Basic actions are just commands, that could be demonstrated as:
-    "If you receive the signal 'enemy', attack it."  More complex
-    actions can be defined through custom awarefuncs (see below) or callbackss.
-
-    """
-
-    def __init__(self, action="cmd", callback=None, **kwargs):
-        self.action = action
-        self.callback = callback
-        self.kwargs = kwargs
-
-    def __repr__(self):
-        return "<Action {}>".format(self.name)
-
-    @property
-    def name(self):
-        """Return a prettier name for the action."""
-        kwargs = ", ".join(["{}={}".format(key, value) for key, value in self.kwargs.items()])
-        msg = ""
-        if self.callback:
-            msg += "with callback {}".format(self.callback)
-        else:
-            msg += self.action
-
-        msg += " (" + kwargs + ")>"
-        return msg
-
+from evennia.contrib.aware.scripts import AwareStorage
 
 class ActionHandler(object):
 
@@ -54,25 +21,8 @@ class ActionHandler(object):
 
     """
 
-    script = None
-    
     def __init__(self, obj):
         self.obj = obj
-
-    def _get_script(self):
-        """Retrieve or create the storage script."""
-        if type(self).script:
-            return type(self).script
-
-        try:
-            script = ScriptDB.objects.get(db_key="aware_storage")
-        except ScriptDB.DoesNotExist:
-            # Create the script
-            script = create_script("evennia.contrib.aware.scripts.AwareStorage")
-        
-        # Place the script in the class variable to retrieve it later
-        type(self).script = script
-        return script
 
     def all(self):
         """
@@ -87,11 +37,26 @@ class ActionHandler(object):
             actions (list): the list of actions.
 
         """
-        script = self._get_script()
-        return script.db.actions.get(self.obj, [])
+        script = AwareStorage.instance
+        if script is None:
+            return []
 
-    def add(self, signal, action="cmd", callback=None, **kwargs):
-        pass
+        actions = script.db.actions.get(self.obj, [])
+        ret = []
+        for action in actions:
+            name = action["name"]
+            args = action["args"]
+            kwargs = action["kwargs"]
+            ret.append(Action(name, *args, **kwargs))
+
+        return ret
+
+    def add(self, signal, *args, **kwargs):
+        script = AwareStorage.instance
+        if script is None:
+            return False
+
+        return script.add_action(signal, self.obj, *args, **kwargs)
 
     def remove(self):
         pass
