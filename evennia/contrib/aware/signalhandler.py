@@ -38,12 +38,15 @@ class SignalHandler(object):
 
         return script.remove_subscriber(signal, self.obj, action, callback, **kwargs)
 
-    def throw(self, signal, *args, **kwargs):
+    def throw(self, signal, **kwargs):
         script = AwareStorage.instance
         if script is None:
             return False
 
-        kwargs["args"] = args
+        if "from_obj" not in kwargs:
+            kwargs["from_obj"] = self.obj
+        if "location" not in kwargs:
+            kwargs["location"] = self.obj
         signal = Signal(signal, **kwargs)
         signal.throw(script)
 
