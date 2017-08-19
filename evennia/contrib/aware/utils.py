@@ -97,8 +97,9 @@ class Signal(object):
         self.from_obj = kwargs.get("from_obj")
         self.location = kwargs.get("location", self.from_obj)
         self.propagation = kwargs.get("propagation", 0)
-        self.args = kwargs.get("args", ())
-        self.kwargs = kwargs.get("kwargs", {})
+        self.toward = kwargs.get("toward")
+        self.backward = kwargs.get("backward")
+        self.kwargs = kwargs
 
     def __repr__(self):
         kwargs = ", ".join(["{}={}".format(arg, value) for arg, value in self.kwargs.items()])
@@ -210,6 +211,8 @@ def do_action(signal, obj, action_id):
     """
     script = _get_script()
     args, kwargs = script.db.unpacked_actions.get(action_id, (None, None))
+    args = list(args)
+    kwargs = dict(kwargs)
     if args is None:
         log_err("The action ID]{} for obj={} cannot be found".format(action_id, obj))
         return

@@ -226,7 +226,15 @@ class AwareStorage(DefaultScript):
 
         # Program the task to execute if high in priority
         if len(actions) == 1 or action_indice == 0:
-            utils.delay(delay, do_action, signal.__dict__.copy(), obj, action_id, persistent=True)
+            unpacked_signal = signal.kwargs.copy()
+            unpacked_signal["name"] = signal.name
+            unpacked_signal["local"] = signal.local
+            unpacked_signal["from_obj"] = signal.from_obj
+            unpacked_signal["location"] = signal.location
+            unpacked_signal["propagation"] = signal.propagation
+            unpacked_signal["toward"] = signal.toward
+            unpacked_signal["backward"] = signal.backward
+            utils.delay(delay, do_action, unpacked_signal, obj, action_id, persistent=True)
 
         return Action(*args, **representation)
 
