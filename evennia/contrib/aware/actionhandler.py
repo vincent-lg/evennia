@@ -10,6 +10,7 @@ script is used to store actions and retain priority orders.
 from evennia import ScriptDB
 from evennia.utils.create import create_script
 from evennia.contrib.aware.scripts import AwareStorage
+from evennia.contrib.aware.utils import Action
 
 class ActionHandler(object):
 
@@ -44,10 +45,15 @@ class ActionHandler(object):
         actions = script.db.actions.get(self.obj, [])
         ret = []
         for action in actions:
-            name = action["name"]
-            args = action["args"]
-            kwargs = action["kwargs"]
-            ret.append(Action(name, *args, **kwargs))
+            action_id = action.get("action_id")
+            if action_id is None:
+                continue
+
+            args, kwargs = script.db.unpacked_actions.get(action_id, ([], {}))
+            args = list(args)
+            kwargs = dict(kwargs)
+            kwargs["action_id"] = action_id
+            ret.append(Action(*args, **kwargs))
 
         return ret
 

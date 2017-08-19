@@ -215,9 +215,9 @@ class AwareStorage(DefaultScript):
         }
         representation.update(kwargs)
         if action_indice < 0:
-            actions.append(representation.copy())
+            actions.append(dict(action_id=action_id, priority=priority, delay=delay))
         else:
-            actions.insert(action_indice, representation.copy())
+            actions.insert(action_indice, dict(action_id=action_id, priority=priority, delay=delay))
 
         # Store the arguments for this action
         kwargs = representation.copy()

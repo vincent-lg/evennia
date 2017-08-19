@@ -60,10 +60,10 @@ class Action(object):
     def name(self):
         """Return a prettier name for the action."""
         args = ", ".join(str(arg) for arg in self.args)
-        kwargs = sorted(self.kwargs.items())
+        kwargs = tuple(sorted(self.kwargs.items()))
         kwargs = (("priority", self.priority), ("delay", self.delay)) + kwargs
         kwargs = ", ".join(["{}={}".format(key, value) for key, value in kwargs])
-        msg = "{}".format(se4lf.action_id)
+        msg = "{}".format(self.action_id)
         if self.callback:
             msg += "with callback {}".format(self.callback)
         else:
@@ -115,35 +115,52 @@ class Signal(object):
             visited = [self.location]
             locations = {self.location: (0, None)}
             graph.put((0, self.location))
+            path_toward = {}
+            path_backward = {}
             while not graph.empty():
                 distance, location = graph.get()
                 if distance > self.propagation:
                     continue
 
                 trace.append({"explore": {"location": location, "distance": distance}})
-                for exit in ObjectDB.objects.filter(db_destination__isnull=False).exclude(
-                            db_destination__in=locations.keys()):
+                for exit in ObjectDB.objects.filter(db_destination__isnull=False).filter(
+                            db_location=location):
                     destination = exit.destination
+                    if destination in visited:
+                        continue
+
                     visited.append(destination)
                     return_exits = ObjectDB.objects.filter(db_location=destination, db_destination=location)
                     return_exit = return_exits[0] if return_exits else None
                     graph.put((distance + 1, destination))
                     locations[destination] = (distance + 1, return_exit)
 
+                    # Resume the list of exits toward the signal and away from it
+                    toward = path_toward.get((location, self.location), {}).copy()
+                    toward[destination] = return_exit
+                    path_toward[(destination, self.location)] = toward
+                    backward = path_backward.get((self.location, location), {}).copy()
+                    backward[location] = exit
+                    path_backward[(self.location, destination)] = backward
+
             # We now have a list of locations with distance and exit
             # Get the objects with the signal name as tag
             subscribed = ObjectDB.objects.filter(db_location__in=visited,
                     db_tags__db_key=self.name, db_tags__db_category="signal")
-            
+
             # Browse the list of objects and send them the signal
             # Sort by distance from location
             subscribed = sorted(subscribed, key=lambda obj: locations[obj.location][0])
             for obj in subscribed:
                 location = obj.location
                 distance, exit = locations[location]
+
+                toward = path_toward.get((location, self.location), {})
+                backward = path_backward.get((self.location, location), {})
                 self.distance = distance
-                self.exit = exit
-                trace.append({"throw": {"obj": obj, "distance": distance, "exit": exit}})
+                self.toward = toward
+                self.backward = backward
+                trace.append({"throw": {"obj": obj, "distance": distance, "toward": toward, "backward": backward}})
 
                 # Get the list of actions to which this object is subscribed for this signal
                 actions = script.db.subscribers.get(self.name, {}).get(obj, [])
@@ -200,9 +217,8 @@ def do_action(signal, obj, action_id):
     # Check if this action is still higher n priority for this object
     actions = script.db.actions.get(obj, [])
     if actions and actions[0].get("action_id") == action_id:
-        representation = actions[0]
-        action = representation.get("action")
-        callback = representation.get("calblack")
+        action = kwargs.get("action")
+        callback = kwargs.get("calblack")
         if isinstance(callback, tuple):
             callback = getattr(callback[0], callback[1])
         
