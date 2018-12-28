@@ -65,7 +65,7 @@ ALLOWED_HOSTS = ["*"]
 # the Portal proxy presents to the world. The serverports are
 # the internal ports the proxy uses to forward data to the Server-side
 # webserver (these should not be publicly open)
-WEBSERVER_PORTS = [(4001, 4002)]
+WEBSERVER_PORTS = [(4001, 4005)]
 # Interface addresses to listen to. If 0.0.0.0, listen to all. Use :: for IPv6.
 WEBSERVER_INTERFACES = ['0.0.0.0']
 # IP addresses that may talk to the server in a reverse proxy configuration,
@@ -89,12 +89,12 @@ WEBSOCKET_CLIENT_ENABLED = True
 # working through a proxy or docker port-remapping, the environment variable
 # WEBCLIENT_CLIENT_PROXY_PORT can be used to override this port only for the
 # front-facing client's sake.
-WEBSOCKET_CLIENT_PORT = 4005
+WEBSOCKET_CLIENT_PORT = 4002
 # Interface addresses to listen to. If 0.0.0.0, listen to all. Use :: for IPv6.
 WEBSOCKET_CLIENT_INTERFACE = '0.0.0.0'
 # Actual URL for webclient component to reach the websocket. You only need
 # to set this if you know you need it, like using some sort of proxy setup.
-# If given it must be on the form "ws[s]://hostname[:port]". If left at None, 
+# If given it must be on the form "ws[s]://hostname[:port]". If left at None,
 # the client will itself figure out this url based on the server's hostname.
 # e.g. ws://external.example.com or wss://external.example.com:443
 WEBSOCKET_CLIENT_URL = None
@@ -115,7 +115,7 @@ AMP_INTERFACE = '127.0.0.1'
 EVENNIA_DIR = os.path.dirname(os.path.abspath(__file__))
 # Path to the game directory (containing the server/conf/settings.py file)
 # This is dynamically created- there is generally no need to change this!
-if sys.argv[1] == 'test' if len(sys.argv) > 1 else False:
+if EVENNIA_DIR.lower() == os.getcwd().lower() or (sys.argv[1] == 'test' if len(sys.argv) > 1 else False):
     # unittesting mode
     GAME_DIR = os.getcwd()
 else:
@@ -138,11 +138,11 @@ HTTP_LOG_FILE = os.path.join(LOG_DIR, 'http_requests.log')
 LOCKWARNING_LOG_FILE = os.path.join(LOG_DIR, 'lockwarnings.log')
 # Rotate log files when server and/or portal stops. This will keep log
 # file sizes down. Turn off to get ever growing log files and never
-# loose log info.
+# lose log info.
 CYCLE_LOGFILES = True
 # Number of lines to append to rotating channel logs when they rotate
 CHANNEL_LOG_NUM_TAIL_LINES = 20
-# Max size of channel log files before they rotate
+# Max size (in bytes) of channel log files before they rotate
 CHANNEL_LOG_ROTATE_SIZE = 1000000
 # Local time zone for this installation. All choices can be found here:
 # http://www.postgresql.org/docs/8.0/interactive/datetime-keywords.html#DATETIME-TIMEZONE-SET-TABLE
@@ -313,6 +313,14 @@ CMD_IGNORE_PREFIXES = "@&/+"
 # This module should contain one or more variables
 # with strings defining the look of the screen.
 CONNECTION_SCREEN_MODULE = "server.conf.connection_screens"
+# Delay to use before sending the evennia.syscmdkeys.CMD_LOGINSTART Command
+# when a new session connects (this defaults the unloggedin-look for showing
+# the connection screen). The delay is useful mainly for telnet, to allow
+# client/server to establish client capabilities like color/mxp etc before
+# sending any text. A value of 0.3 should be enough. While a good idea, it may
+# cause issues with menu-logins and autoconnects since the menu will not have
+# started when the autoconnects starts sending menu commands.
+DELAY_CMD_LOGINSTART = 0.3
 # An optional module that, if existing, must hold a function
 # named at_initial_setup(). This hook method can be used to customize
 # the server's initial setup sequence (the very first startup of the system).
@@ -346,6 +354,9 @@ LOCK_FUNC_MODULES = ("evennia.locks.lockfuncs", "server.conf.lockfuncs",)
 INPUT_FUNC_MODULES = ["evennia.server.inputfuncs", "server.conf.inputfuncs"]
 # Modules that contain prototypes for use with the spawner mechanism.
 PROTOTYPE_MODULES = ["world.prototypes"]
+# Modules containining Prototype functions able to be embedded in prototype
+# definitions from in-game.
+PROT_FUNC_MODULES = ["evennia.prototypes.protfuncs"]
 # Module holding settings/actions for the dummyrunner program (see the
 # dummyrunner for more information)
 DUMMYRUNNER_SETTINGS_MODULE = "evennia.server.profiling.dummyrunner_settings"
@@ -462,7 +473,7 @@ BASE_SCRIPT_TYPECLASS = "typeclasses.scripts.Script"
 DEFAULT_HOME = "#2"
 # The start position for new characters. Default is Limbo (#2).
 #  MULTISESSION_MODE = 0, 1 - used by default unloggedin create command
-#  MULTISESSION_MODE = 2,3 - used by default character_create command
+#  MULTISESSION_MODE = 2, 3 - used by default character_create command
 START_LOCATION = "#2"
 # Lookups of Attributes, Tags, Nicks, Aliases can be aggressively
 # cached to avoid repeated database hits. This often gives noticeable
@@ -496,11 +507,16 @@ TIME_FACTOR = 2.0
 # The starting point of your game time (the epoch), in seconds.
 # In Python a value of 0 means Jan 1 1970 (use negatives for earlier
 # start date). This will affect the returns from the utils.gametime
-# module.
+# module. If None, the server's first start-time is used as the epoch.
 TIME_GAME_EPOCH = None
+# Normally, game time will only increase when the server runs. If this is True,
+# game time will not pause when the server reloads or goes offline. This setting
+# together with a time factor of 1 should keep the game in sync with
+# the real time (add a different epoch to shift time)
+TIME_IGNORE_DOWNTIMES = False
 
 ######################################################################
-# Inlinefunc
+# Inlinefunc & PrototypeFuncs
 ######################################################################
 # Evennia supports inline function preprocessing. This allows users
 # to supply inline calls on the form $func(arg, arg, ...) to do
@@ -512,6 +528,10 @@ INLINEFUNC_ENABLED = False
 # is loaded from left-to-right, same-named functions will overload
 INLINEFUNC_MODULES = ["evennia.utils.inlinefuncs",
                       "server.conf.inlinefuncs"]
+# Module holding handlers for OLCFuncs. These allow for embedding
+# functional code in prototypes
+PROTOTYPEFUNC_MODULES = ["evennia.utils.prototypefuncs",
+                         "server.conf.prototypefuncs"]
 
 ######################################################################
 # Default Account setup and access
@@ -532,9 +552,7 @@ INLINEFUNC_MODULES = ["evennia.utils.inlinefuncs",
 #  3 - like mode 2, except multiple sessions can puppet one character, each
 #      session getting the same data.
 MULTISESSION_MODE = 0
-# The maximum number of characters allowed for MULTISESSION_MODE 2,3. This is
-# checked by the default ooc char-creation command. Forced to 1 for
-# MULTISESSION_MODE 0 and 1.
+# The maximum number of characters allowed by the default ooc char-creation command
 MAX_NR_CHARACTERS = 1
 # The access hierarchy, in climbing order. A higher permission in the
 # hierarchy includes access of all levels below it. Used by the perm()/pperm()
@@ -781,6 +799,16 @@ INSTALLED_APPS = (
 # The user profile extends the User object with more functionality;
 # This should usually not be changed.
 AUTH_USER_MODEL = "accounts.AccountDB"
+
+# Password validation plugins
+# https://docs.djangoproject.com/en/1.11/ref/settings/#auth-password-validators
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 8}},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {'NAME': 'evennia.server.validators.EvenniaPasswordValidator'}]
 
 # Use a custom test runner that just tests Evennia-specific apps.
 TEST_RUNNER = 'evennia.server.tests.EvenniaTestSuiteRunner'

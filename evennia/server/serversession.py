@@ -188,6 +188,7 @@ class ServerSession(Session):
         if not _ObjectDB:
             from evennia.objects.models import ObjectDB as _ObjectDB
 
+        super(ServerSession, self).at_sync()
         if not self.logged_in:
             # assign the unloggedin-command set.
             self.cmdset_storage = settings.CMDSET_UNLOGGEDIN
@@ -400,12 +401,13 @@ class ServerSession(Session):
         # this can happen if this is triggered e.g. a command.msg
         # that auto-adds the session, we'd get a kwarg collision.
         kwargs.pop("session", None)
+        kwargs.pop("from_obj", None)
         if text is not None:
             self.data_out(text=text, **kwargs)
         else:
             self.data_out(**kwargs)
 
-    def execute_cmd(self, raw_string, **kwargs):
+    def execute_cmd(self, raw_string, session=None, **kwargs):
         """
         Do something as this object. This method is normally never
         called directly, instead incoming command instructions are
@@ -415,6 +417,9 @@ class ServerSession(Session):
 
         Args:
             raw_string (string): Raw command input
+            session (Session): This is here to make API consistent with
+                Account/Object.execute_cmd. If given, data is passed to
+                that Session, otherwise use self.
         Kwargs:
             Other keyword arguments will be added to the found command
             object instace as variables before it executes.  This is
@@ -424,7 +429,7 @@ class ServerSession(Session):
         """
         # inject instruction into input stream
         kwargs["text"] = ((raw_string,), {})
-        self.sessionhandler.data_in(self, **kwargs)
+        self.sessionhandler.data_in(session or self, **kwargs)
 
     def __eq__(self, other):
         """Handle session comparisons"""
