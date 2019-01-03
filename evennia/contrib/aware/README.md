@@ -1,6 +1,6 @@
 # Aware contrib
 
-Evennia contributors: Chainsol, Vincent Le Goff, 2017
+Evennia contributors: Chainsol, vincent-lg, 2017
 
 The goal of this contrib is to add simple awareness from characters (or really, any object) in an
 Evennia world.  This awareness would present the first opportunity for artificial intelligence to set in,
@@ -23,7 +23,7 @@ sections.  In short:
     the `Character` class (or the `NPC` class, if you have one).
 - The `SignalHandler` (available under `obj.signals` once installed) allows to subscribe to signals
     (particular inputs) and to throw them.  The latter might be useful for other typeclasses (a room
-    might want to throw a "warning"  signal to all its content, for instance).
+    might want to throw a "warning" signal to all its content, for instance).
 
 To have access to these features, you can inherit from:
 
@@ -47,7 +47,7 @@ class Character(AwareMixin, DefaultCharactert):
     pass
 ```
 
-Your objects using the `Character`  class will now be able to do `obj.signals` to access the `SignalHandler`
+Your objects using the `Character` class will now be able to do `obj.signals` to access the `SignalHandler`
 and `obj.actions` to access the `ActionHandler`.
 
 - In `typeclasses.rooms.py`:
@@ -65,7 +65,7 @@ class Room(SignalsMixin, DefaultRoom):
     pass
 ```
 
-Your objects using the `Room`  class will now be able to do `obj.signals` to access the `SignalHandler`, but not `obj.actions` to access the `ActionHandler`.
+Your objects using the `Room` class will now be able to do `obj.signals` to access the `SignalHandler`, but not `obj.actions` to access the `ActionHandler`.
 
 ## Basic principle
 
@@ -83,7 +83,7 @@ situation.  Both signals and actions can be extended to a great extent.  The cyc
 1. A signal is thrown.  Let's say gunfire erupted to the south of this room.  All characters will be
     notified of this signal.  It allows, virtually, to add the same system to players or objects or even exits.
 2. An object (like a character) is subscribed to this signal.  It has defined that it should flee in the
-    opposite direction if such a signal should be thrown.  So it adds the action "flee to the north"  to its action queue.
+    opposite direction if such a signal should be thrown.  So it adds the action "flee to the north" to its action queue.
 3. The action queue will be executed, making this character start to flee to the north.
 
 It is often necessary to add several actions in a given order to react to the signal.  It can also

@@ -23,7 +23,7 @@ class AwareStorage(DefaultScript):
     """
     Global script to store information regarding signals and actions.
     """
-    
+
     instance = None
 
     def at_script_creation(self):
@@ -35,7 +35,7 @@ class AwareStorage(DefaultScript):
         self.db.subscribers = {}
         self.db.actions = {}
         self.db.action_storage = {}
-        self.db.unpacked_actions = []
+        self.db.unpacked_actions = {}
 
     def at_start(self):
         self.ndb.traces = {}
@@ -48,7 +48,7 @@ class AwareStorage(DefaultScript):
                 action_id = action.get("action_id")
                 if action_id:
                     self.ndb.action_ids.append(action_id)
-        
+
         if self.ndb.action_ids:
             self.free_id = max(self.ndb.action_ids) + 1
 
@@ -69,6 +69,8 @@ class AwareStorage(DefaultScript):
         Args:
             signal (str): the signal, can use sub-categories.
             obj (Object): the object wanted to subscribe to this signal.
+
+        Kwargs:
             action (str, optional): action, as a pre-configured awarefunc.
             callback (callable): callback to be called if the signal is thrown.
             Any (any): other keywords as needed.
@@ -125,18 +127,18 @@ class AwareStorage(DefaultScript):
         }
         if not signal in self.db.subscribers:
             return False
-        
+
         subscribers = self.db.subscribers[signal]
         if obj not in subscribers:
             return False
-        
+
         signatures = subscribers[obj]
         if signature in signatures:
             signatures.remove(signature)
         else:
             # Perhaps we should raise an error here?
             return False
-        
+
         # Remove the tag if necessary
         if obj.tags.get(signal, category="signal"):
             obj.tags.remove(signal, category="signal")
@@ -163,7 +165,7 @@ class AwareStorage(DefaultScript):
             this action.  Unless otherwise specified, the action will
             be called almost immediately (after a little pause to
             ensure actions don't collide with each other).
-            
+
             The `priority` keyword will specify the order of actions.
             A higher priority will be first in the action queue.  If
             the priority isn't specified, a priority 0 is assumed.
@@ -174,30 +176,18 @@ class AwareStorage(DefaultScript):
         self.ndb.action_ids.append(action_id)
 
         # Extract the keyword arguments
-        action = "cmd"
-        if "aciton" in kwargs:
-            action = kwargs.pop("action")
-
-        callback = None
-        if "callback" in kwargs:
-            callback = kwargs.pop("callback")
-
-        priority = 0
-        if "priority" in kwargs:
-            priority = kwargs.pop("priority")
-
-        delay = 0
-        if "delay" in kwargs:
-            delay = kwargs.pop("delay")
+        action = kwargs.pop("action", "cmd")
+        callback = kwargs.pop("callback", None)
+        priority = kwargs.pop("priority", 0)
+        delay = kwargs.pop("delay", 0)
 
         if obj not in self.db.actions:
             self.db.actions[obj] = []
         actions = self.db.actions[obj]
 
-        action_indice = 0
-        if "action_indice" in kwargs:
-            action_indice = kwargs.pop("action_indice")
-        else:
+        action_indice = kwargs.pop("action_indice", 0)
+
+        if action_indice == 0:
             # Determine the action_indice based on priority
             action_indice = -1
             for indice, description in enumerate(actions):
@@ -222,6 +212,7 @@ class AwareStorage(DefaultScript):
         # Store the arguments for this action
         kwargs = representation.copy()
         del kwargs["action_id"]
+        print action_id, args, kwargs
         self.db.unpacked_actions[action_id] = [list(args), kwargs]
 
         # Program the task to execute if high in priority
@@ -237,4 +228,3 @@ class AwareStorage(DefaultScript):
             utils.delay(delay, do_action, unpacked_signal, obj, action_id, persistent=True)
 
         return Action(*args, **representation)
-

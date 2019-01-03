@@ -17,39 +17,26 @@ _SIGNAL_SEPARATOR = ":"
 # Classes
 class Action(object):
 
-    """Class to represent an action.
+    """
+    Class to represent an action.
 
     An action is to connect an object and a signal.  This class will
     determine what the object should do if this signal is thrown.
-    Basic actions are just commands, that could be demonstrated as:
+    Basic actions are just commands, that could be described as:
     "If you receive the signal 'enemy', attack it."  More complex
-    actions can be defined through custom awarefuncs (see below) or callbackss.
+
+    Actions can be defined through custom awarefuncs (see below) or callbackss.
 
     """
 
     def __init__(self, *args, **kwargs):
-        self.action_id = None
-        self.action = "cmd"
-        self.callback = None
-        self.priority = 0
-        self.delay = 0
+        self.action_id = kwargs.pop("action_id", None)
+        self.action = kwargs.pop("action", "cmd")
+        self.callback = kwargs.pop("callback", None)
+        self.priority = kwargs.pop("priority", 0)
+        self.delay = kwargs.pop("delay", 0)
 
-        # Extract arguments for kwargs
-        if "action_id" in kwargs:
-            self.action_id = kwargs.pop("action_id")
-
-        if "action" in kwargs:
-            self.action = kwargs.pop("action")
-
-        if "callback" in kwargs:
-            self.callback = kwargs.pop("callback")
-
-        if "priority" in kwargs:
-            self.priority = kwargs.pop("priority")
-        
-        if "delay" in kwargs:
-            self.delay = kwargs.pop("delay")
-
+        # Save the rest of the arguments
         self.args = args
         self.kwargs = kwargs
 
@@ -74,7 +61,7 @@ class Action(object):
             msg += args
             if kwargs:
                 msg += ", "
-        
+
         msg += kwargs + ")"
         return msg
 
@@ -109,7 +96,7 @@ class Signal(object):
         """Throw the signal, replacing keyword arguments."""
         trace = [{"source": self.__dict__.copy()}]
         script.ndb.traces[self.name] = trace
-      
+
         # If a local signal, get the possible locations
         if self.local:
             graph = Queue()
@@ -174,7 +161,7 @@ class Signal(object):
 # Functions
 def _get_script():
     """ Return the script and put it in the SCRIPT variable.
-    
+
     Note:
     \
         This function will create the script if it can't be found.  If
@@ -224,13 +211,13 @@ def do_action(signal, obj, action_id):
         callback = kwargs.get("calblack")
         if isinstance(callback, tuple):
             callback = getattr(callback[0], callback[1])
-        
+
         if action is None and callback is None:
             log_err("Action of ID={} for obj={} has neither action nor callback".format(action_id, obj))
             return
         elif action:
             callback = script.ndb.awarefuncs[action]
-        
+
         # Create the signal and storage
         signal = Signal(**signal)
         if action_id not in script.db.action_storage:
@@ -271,7 +258,7 @@ def do_action(signal, obj, action_id):
             else:
                 next_action_id = action_id
                 delay = 0
-            
+
             # Schedule the next action
             if next_action_id is not None:
                 utils.delay(delay, do_action, signal.__dict__.copy(), obj, next_action_id, persistent=True)
@@ -289,4 +276,3 @@ def terminate_action(obj, action_id):
         script.db.actions[obj][:] = [action for action in script.db.actions[obj] if action.get("action_id") != action_id]
         if not script.db.actions[obj]:
             del script.db.actions[obj]
-

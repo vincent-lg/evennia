@@ -40,11 +40,9 @@ class ActionHandler(object):
             return []
 
         actions = script.db.actions.get(self.obj, [])
-        import pudb,sys;p = pudb.Pudb(stdout=sys.__stdout__);p.set_trace()
         ret = []
         for action in actions:
             ret.append(self.make_action(action["action_id"]))
-            ret.append(Action(*args, **kwargs))
 
         return ret
 
@@ -61,7 +59,7 @@ class ActionHandler(object):
             actions (list of Action): the list of actions before the specified
             action ID.  If you set `include` to True, the last element
             of the list is the action with the ID you specified.
-        
+
         """
         script = _get_script()
         ids = [desc["action_id"] for desc in script.db.actions.get(self.obj, [])]
@@ -91,7 +89,7 @@ class ActionHandler(object):
             actions (list of Action): the list of actions after the specified
             action ID.  If you set `include` to True, the first element
             of the list is the action with the ID you specified.
-        
+
         """
         script = _get_script()
         ids = [desc["action_id"] for desc in script.db.actions.get(self.obj, [])]
@@ -119,7 +117,7 @@ class ActionHandler(object):
         pass
 
     @classmethod
-    def make_action(self, aciton_id):
+    def make_action(self, action_id):
         """
         Make and return an Action object.
 
